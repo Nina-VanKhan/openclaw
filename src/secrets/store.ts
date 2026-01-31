@@ -147,6 +147,40 @@ export async function setSecret(
   return { ok: false, error: result.error };
 }
 
+/**
+ * Update an existing secret's value and/or description.
+ * If value is not provided, keeps the existing value (useful for description-only updates).
+ */
+export async function updateSecret(
+  name: string,
+  updates: { value?: string; description?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let found = false;
+  const result = await updateSecretsStoreWithLock((store) => {
+    const existing = store.secrets[name];
+    if (!existing) {
+      found = false;
+      return false; // Secret doesn't exist, don't save
+    }
+    found = true;
+    const now = new Date().toISOString();
+    store.secrets[name] = {
+      value: updates.value ?? existing.value,
+      description: updates.description !== undefined ? updates.description : existing.description,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+    };
+    return true;
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+  if (!found) {
+    return { ok: false, error: "secret not found" };
+  }
+  return { ok: true };
+}
+
 export async function removeSecret(
   name: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

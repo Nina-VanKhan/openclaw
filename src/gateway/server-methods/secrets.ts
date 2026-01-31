@@ -16,6 +16,7 @@ import {
   listSecrets,
   removeSecret,
   setSecret,
+  updateSecret,
   type SecretMetadata,
 } from "../../secrets/index.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
@@ -39,6 +40,12 @@ export type SecretsGetParams = {
   name: string;
 };
 
+export type SecretsUpdateParams = {
+  name: string;
+  value?: string;
+  description?: string;
+};
+
 function validateSecretsSetParams(params: unknown): params is SecretsSetParams {
   if (!params || typeof params !== "object") return false;
   const p = params as Record<string, unknown>;
@@ -58,6 +65,17 @@ function validateSecretsGetParams(params: unknown): params is SecretsGetParams {
   if (!params || typeof params !== "object") return false;
   const p = params as Record<string, unknown>;
   if (typeof p.name !== "string" || !p.name.trim()) return false;
+  return true;
+}
+
+function validateSecretsUpdateParams(params: unknown): params is SecretsUpdateParams {
+  if (!params || typeof params !== "object") return false;
+  const p = params as Record<string, unknown>;
+  if (typeof p.name !== "string" || !p.name.trim()) return false;
+  // At least one of value or description should be provided
+  const hasValue = typeof p.value === "string";
+  const hasDescription = typeof p.description === "string";
+  if (!hasValue && !hasDescription) return false;
   return true;
 }
 
@@ -93,6 +111,48 @@ export const secretsHandlers: GatewayRequestHandlers = {
           false,
           undefined,
           errorShape(ErrorCodes.UNAVAILABLE, `failed to save secret: ${result.error}`),
+        );
+      }
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+    }
+  },
+
+  "secrets.update": async ({ params, respond }) => {
+    if (!validateSecretsUpdateParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          "invalid secrets.update params: name required, plus value and/or description",
+        ),
+      );
+      return;
+    }
+
+    const name = params.name.trim();
+    if (!hasSecret(name)) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `secret "${name}" not found`),
+      );
+      return;
+    }
+
+    try {
+      const result = await updateSecret(name, {
+        value: params.value,
+        description: params.description?.trim(),
+      });
+      if (result.ok) {
+        respond(true, { ok: true });
+      } else {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.UNAVAILABLE, `failed to update secret: ${result.error}`),
         );
       }
     } catch (err) {

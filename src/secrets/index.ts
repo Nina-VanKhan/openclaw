@@ -22,5 +22,6 @@ export {
   resolveSecretsPath,
   saveSecretsStore,
   setSecret,
+  updateSecret,
 } from "./store.js";
 export type { SecretEntry, SecretMetadata, SecretsConfig, SecretsStore } from "./types.js";
