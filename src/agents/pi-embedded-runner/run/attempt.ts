@@ -370,6 +370,7 @@ export async function runEmbeddedAttempt(
       userTime,
       userTimeFormat,
       contextFiles,
+      secretsConfig: params.config?.secrets,
     });
     const systemPromptReport = buildSystemPromptReport({
       source: "run",

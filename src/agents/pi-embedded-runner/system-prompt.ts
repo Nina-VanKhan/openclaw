@@ -45,6 +45,8 @@ export function buildEmbeddedSystemPrompt(params: {
   userTime?: string;
   userTimeFormat?: ResolvedTimeFormat;
   contextFiles?: EmbeddedContextFile[];
+  /** Secrets config for controlling which secrets are shown in prompt. */
+  secretsConfig?: import("../../config/types.secrets.js").SecretsConfig;
 }): string {
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
@@ -70,6 +72,7 @@ export function buildEmbeddedSystemPrompt(params: {
     userTime: params.userTime,
     userTimeFormat: params.userTimeFormat,
     contextFiles: params.contextFiles,
+    secretsConfig: params.secretsConfig,
   });
 }
 

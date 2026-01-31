@@ -11,13 +11,27 @@ import { listSecrets, loadSecretsStore } from "./store.js";
 import type { SecretMetadata, SecretsConfig } from "./types.js";
 
 /**
+ * Normalize config input to SecretsConfig.
+ * Accepts either OpenClawConfig (extracts .secrets) or SecretsConfig directly.
+ */
+function resolveSecretsConfig(config?: OpenClawConfig | SecretsConfig): SecretsConfig | undefined {
+  if (!config) return undefined;
+  // If it has a 'secrets' property, it's OpenClawConfig
+  if ("secrets" in config && typeof config.secrets === "object") {
+    return config.secrets as SecretsConfig | undefined;
+  }
+  // Otherwise treat as SecretsConfig directly
+  return config as SecretsConfig;
+}
+
+/**
  * Get environment variables for secrets based on config.
  *
- * @param config - OpenClaw config (for secrets.available filtering)
+ * @param config - OpenClaw config or SecretsConfig (for secrets.available filtering)
  * @returns Record of env var name → secret value
  */
-export function getSecretsEnvVars(config?: OpenClawConfig): Record<string, string> {
-  const secretsConfig = config?.secrets as SecretsConfig | undefined;
+export function getSecretsEnvVars(config?: OpenClawConfig | SecretsConfig): Record<string, string> {
+  const secretsConfig = resolveSecretsConfig(config);
   const store = loadSecretsStore();
   const prefix = secretsConfig?.envPrefix ?? "";
   const available = secretsConfig?.available;
@@ -39,11 +53,13 @@ export function getSecretsEnvVars(config?: OpenClawConfig): Record<string, strin
 /**
  * Get list of available secret names for system prompt injection.
  *
- * @param config - OpenClaw config (for secrets.available filtering)
+ * @param config - OpenClaw config or SecretsConfig (for secrets.available filtering)
  * @returns Array of secret metadata (names + descriptions, NO values)
  */
-export function getAvailableSecretsForPrompt(config?: OpenClawConfig): SecretMetadata[] {
-  const secretsConfig = config?.secrets as SecretsConfig | undefined;
+export function getAvailableSecretsForPrompt(
+  config?: OpenClawConfig | SecretsConfig,
+): SecretMetadata[] {
+  const secretsConfig = resolveSecretsConfig(config);
 
   // If prompt injection is disabled, return empty
   if (secretsConfig?.injectToPrompt === false) {
@@ -65,10 +81,10 @@ export function getAvailableSecretsForPrompt(config?: OpenClawConfig): SecretMet
 /**
  * Format secrets for system prompt injection.
  *
- * @param config - OpenClaw config
+ * @param config - OpenClaw config or SecretsConfig
  * @returns Formatted string for system prompt, or empty string if no secrets
  */
-export function formatSecretsForPrompt(config?: OpenClawConfig): string {
+export function formatSecretsForPrompt(config?: OpenClawConfig | SecretsConfig): string {
   const secrets = getAvailableSecretsForPrompt(config);
 
   if (secrets.length === 0) {
@@ -100,12 +116,12 @@ export function formatSecretsForPrompt(config?: OpenClawConfig): string {
  * Merge secrets into an existing env object for subprocess execution.
  *
  * @param baseEnv - Base environment (e.g., process.env)
- * @param config - OpenClaw config
+ * @param config - OpenClaw config or SecretsConfig
  * @returns Merged environment with secrets injected
  */
 export function mergeSecretsIntoEnv(
   baseEnv: Record<string, string | undefined>,
-  config?: OpenClawConfig,
+  config?: OpenClawConfig | SecretsConfig,
 ): Record<string, string | undefined> {
   const secretsEnv = getSecretsEnvVars(config);
   return {

@@ -246,6 +246,7 @@ export function buildSystemPrompt(params: {
     userTimeFormat,
     contextFiles: params.contextFiles,
     ttsHint,
+    secretsConfig: params.config?.secrets,
   });
 }
 

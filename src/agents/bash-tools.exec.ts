@@ -135,6 +135,8 @@ export type ExecToolDefaults = {
   messageProvider?: string;
   notifyOnExit?: boolean;
   cwd?: string;
+  /** Secrets config for filtering which secrets are injected as env vars. */
+  secretsConfig?: import("../config/types.secrets.js").SecretsConfig;
 };
 
 export type { BashSandboxConfig } from "./bash-tools.shared.js";
@@ -767,6 +769,7 @@ export function createExecTool(
       : 1800;
   const defaultPathPrepend = normalizePathPrepend(defaults?.pathPrepend);
   const safeBins = resolveSafeBins(defaults?.safeBins);
+  const secretsConfig = defaults?.secretsConfig;
   const notifyOnExit = defaults?.notifyOnExit !== false;
   const notifySessionKey = defaults?.sessionKey?.trim() || undefined;
   const approvalRunningNoticeMs = resolveApprovalRunningNoticeMs(defaults?.approvalRunningNoticeMs);
@@ -937,9 +940,12 @@ export function createExecTool(
       applyPathPrepend(env, defaultPathPrepend);
 
       // Inject user secrets as env vars (values never enter model context)
-      const secretsEnv = getSecretsEnvVars();
+      // Don't override explicitly provided env vars from params.env
+      const secretsEnv = getSecretsEnvVars(secretsConfig);
       for (const [key, value] of Object.entries(secretsEnv)) {
-        env[key] = value;
+        if (!(key in (params.env ?? {}))) {
+          env[key] = value;
+        }
       }
 
       if (host === "node") {

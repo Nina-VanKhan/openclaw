@@ -366,6 +366,7 @@ export async function handleBashChatCommand(params: {
       timeoutSec,
       sessionKey: params.sessionKey,
       notifyOnExit,
+      secretsConfig: params.cfg.secrets,
       elevated: {
         enabled: params.elevated.enabled,
         allowed: params.elevated.allowed,

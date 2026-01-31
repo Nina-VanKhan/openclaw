@@ -85,9 +85,13 @@ export function saveSecretsStore(store: SecretsStore): void {
   fs.chmodSync(filePath, 0o600);
 }
 
+export type SecretsStoreUpdateResult =
+  | { ok: true; store: SecretsStore }
+  | { ok: false; error: string };
+
 export async function updateSecretsStoreWithLock(
   updater: (store: SecretsStore) => boolean,
-): Promise<SecretsStore | null> {
+): Promise<SecretsStoreUpdateResult> {
   const filePath = resolveSecretsPath();
   ensureSecretsFile(filePath);
 
@@ -99,9 +103,10 @@ export async function updateSecretsStoreWithLock(
     if (shouldSave) {
       saveSecretsStore(store);
     }
-    return store;
-  } catch {
-    return null;
+    return { ok: true, store };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: message };
   } finally {
     if (release) {
       try {
@@ -124,7 +129,7 @@ export async function setSecret(
   name: string,
   value: string,
   description?: string,
-): Promise<boolean> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await updateSecretsStoreWithLock((store) => {
     const now = new Date().toISOString();
     const existing = store.secrets[name];
@@ -136,10 +141,15 @@ export async function setSecret(
     };
     return true;
   });
-  return result !== null;
+  if (result.ok) {
+    return { ok: true };
+  }
+  return { ok: false, error: result.error };
 }
 
-export async function removeSecret(name: string): Promise<boolean> {
+export async function removeSecret(
+  name: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await updateSecretsStoreWithLock((store) => {
     if (!(name in store.secrets)) {
       return false;
@@ -147,7 +157,10 @@ export async function removeSecret(name: string): Promise<boolean> {
     delete store.secrets[name];
     return true;
   });
-  return result !== null;
+  if (result.ok) {
+    return { ok: true };
+  }
+  return { ok: false, error: result.error };
 }
 
 export function listSecrets(): SecretMetadata[] {

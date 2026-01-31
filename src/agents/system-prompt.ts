@@ -209,6 +209,8 @@ export function buildAgentSystemPrompt(params: {
     level: "minimal" | "extensive";
     channel: string;
   };
+  /** Secrets config for controlling which secrets are shown in prompt. */
+  secretsConfig?: import("../config/types.secrets.js").SecretsConfig;
 }) {
   const coreToolSummaries: Record<string, string> = {
     read: "Read file contents",
@@ -477,7 +479,7 @@ export function buildAgentSystemPrompt(params: {
       : "",
     params.sandboxInfo?.enabled ? "" : "",
     // Inject available secrets (names only, not values) into system prompt
-    formatSecretsForPrompt(),
+    formatSecretsForPrompt(params.secretsConfig),
     ...buildUserIdentitySection(ownerLine, isMinimal),
     ...buildTimeSection({
       userTimezone,

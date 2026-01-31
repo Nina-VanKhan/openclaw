@@ -1,5 +1,13 @@
 /**
  * Gateway RPC handlers for secrets management.
+ *
+ * TODO: Consider adding explicit auth/permission checks for secrets RPC.
+ * Currently these handlers are accessible to any connected UI client.
+ * If the gateway is exposed beyond localhost, this could be a security concern.
+ * Options:
+ * - Gate behind same auth used for other sensitive endpoints
+ * - Explicitly document/enforce loopback-only access
+ * - Add a secrets-specific permission flag
  */
 
 import {
@@ -77,11 +85,15 @@ export const secretsHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      const success = await setSecret(params.name.trim(), params.value, params.description?.trim());
-      if (success) {
+      const result = await setSecret(params.name.trim(), params.value, params.description?.trim());
+      if (result.ok) {
         respond(true, { ok: true });
       } else {
-        respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "failed to save secret"));
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.UNAVAILABLE, `failed to save secret: ${result.error}`),
+        );
       }
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
@@ -109,11 +121,15 @@ export const secretsHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      const success = await removeSecret(name);
-      if (success) {
+      const result = await removeSecret(name);
+      if (result.ok) {
         respond(true, { ok: true });
       } else {
-        respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "failed to remove secret"));
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.UNAVAILABLE, `failed to remove secret: ${result.error}`),
+        );
       }
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));

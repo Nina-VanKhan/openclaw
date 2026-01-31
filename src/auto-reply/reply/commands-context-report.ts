@@ -156,6 +156,7 @@ async function resolveContextReport(
     ttsHint,
     runtimeInfo,
     sandboxInfo,
+    secretsConfig: params.cfg?.secrets,
   });
 
   return buildSystemPromptReport({

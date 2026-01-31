@@ -349,6 +349,7 @@ export async function compactEmbeddedPiSessionDirect(
       userTime,
       userTimeFormat,
       contextFiles,
+      secretsConfig: params.config?.secrets,
     });
     const systemPrompt = createSystemPromptOverride(appendPrompt);
 

@@ -39,14 +39,19 @@ function promptForValue(prompt: string): Promise<string> {
     let value = "";
     process.stderr.write(prompt);
 
-    stdin.on("data", (chunk: Buffer) => {
+    const cleanup = () => {
+      stdin.removeListener("data", onData);
+      if (stdin.isTTY && stdin.setRawMode) {
+        stdin.setRawMode(wasRaw ?? false);
+      }
+      rl.close();
+    };
+
+    const onData = (chunk: Buffer) => {
       const char = chunk.toString();
       if (char === "\n" || char === "\r") {
-        if (stdin.isTTY && stdin.setRawMode) {
-          stdin.setRawMode(wasRaw ?? false);
-        }
+        cleanup();
         process.stderr.write("\n");
-        rl.close();
         resolve(value);
       } else if (char === "\x7f" || char === "\b") {
         // Backspace
@@ -56,13 +61,16 @@ function promptForValue(prompt: string): Promise<string> {
         }
       } else if (char === "\x03") {
         // Ctrl+C
+        cleanup();
         process.stderr.write("\n");
         process.exit(1);
       } else {
         value += char;
         process.stderr.write("*");
       }
-    });
+    };
+
+    stdin.on("data", onData);
   });
 }
 
@@ -98,12 +106,12 @@ export async function secretsSetCommand(
     process.exit(1);
   }
 
-  const success = await setSecret(name, value, options.description);
+  const result = await setSecret(name, value, options.description);
 
-  if (success) {
+  if (result.ok) {
     console.error(`${GREEN}✓${RESET} Secret ${BOLD}${name}${RESET} saved`);
   } else {
-    console.error(`${RED}✗${RESET} Failed to save secret`);
+    console.error(`${RED}✗${RESET} Failed to save secret: ${result.error}`);
     process.exit(1);
   }
 }
@@ -152,12 +160,12 @@ export async function secretsRemoveCommand(name: string): Promise<void> {
     process.exit(1);
   }
 
-  const success = await removeSecret(name);
+  const result = await removeSecret(name);
 
-  if (success) {
+  if (result.ok) {
     console.log(`${GREEN}✓${RESET} Secret ${BOLD}${name}${RESET} removed`);
   } else {
-    console.error(`${RED}✗${RESET} Failed to remove secret`);
+    console.error(`${RED}✗${RESET} Failed to remove secret: ${result.error}`);
     process.exit(1);
   }
 }
