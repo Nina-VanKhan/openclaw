@@ -1,0 +1,37 @@
+{
+  "name": "@openclaw/microsoft365",
+  "version": "0.1.0",
+  "description": "OpenClaw Microsoft 365 Mail & Calendar channel plugin",
+  "type": "module",
+  "dependencies": {
+    "express": "^5.2.1",
+    "openclaw": "workspace:*"
+  },
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "microsoft365",
+      "label": "Microsoft 365 Mail",
+      "selectionLabel": "Microsoft 365 Mail (Outlook)",
+      "docsPath": "/channels/microsoft365",
+      "docsLabel": "microsoft365",
+      "blurb": "Email via Microsoft Graph API with webhooks for real-time notifications.",
+      "aliases": [
+        "outlook",
+        "office365",
+        "o365"
+      ],
+      "order": 61
+    },
+    "install": {
+      "npmSpec": "@openclaw/microsoft365",
+      "localPath": "extensions/microsoft365",
+      "defaultChoice": "local"
+    }
+  }
+}

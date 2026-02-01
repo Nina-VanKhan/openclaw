@@ -1,0 +1,56 @@
+{
+  "id": "microsoft365",
+  "channels": ["microsoft365"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "clientId": {
+        "type": "string",
+        "description": "Azure AD Application (client) ID"
+      },
+      "clientSecret": {
+        "type": "string",
+        "description": "Azure AD client secret"
+      },
+      "tenantId": {
+        "type": "string",
+        "description": "Azure AD tenant ID (or 'common' for multi-tenant)"
+      },
+      "refreshToken": {
+        "type": "string",
+        "description": "OAuth2 refresh token (obtained via auth flow)"
+      },
+      "webhook": {
+        "type": "object",
+        "properties": {
+          "port": { "type": "number", "default": 3979 },
+          "path": { "type": "string", "default": "/api/mail" },
+          "publicUrl": { "type": "string", "description": "Public URL for webhook notifications" }
+        }
+      },
+      "pollIntervalMs": {
+        "type": "number",
+        "default": 60000,
+        "description": "Polling interval if webhooks unavailable (ms)"
+      },
+      "folders": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": ["Inbox"],
+        "description": "Mail folders to monitor"
+      }
+    }
+  },
+  "uiHints": {
+    "clientId": { "label": "Client ID", "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+    "clientSecret": { "label": "Client Secret", "sensitive": true },
+    "tenantId": { "label": "Tenant ID", "placeholder": "common" },
+    "refreshToken": { "label": "Refresh Token", "sensitive": true, "advanced": true },
+    "webhook.port": { "label": "Webhook Port", "placeholder": "3979" },
+    "webhook.path": { "label": "Webhook Path", "placeholder": "/api/mail" },
+    "webhook.publicUrl": { "label": "Public Webhook URL", "placeholder": "https://your-domain.com/api/mail" },
+    "pollIntervalMs": { "label": "Poll Interval (ms)", "advanced": true },
+    "folders": { "label": "Monitored Folders", "placeholder": "Inbox, Sent Items" }
+  }
+}
