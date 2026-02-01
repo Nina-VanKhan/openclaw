@@ -21,6 +21,7 @@ import { microsoft365Plugin } from "./src/channel.js";
 
 export { GraphClient, resolveCredentials, buildAuthUrl, exchangeCodeForTokens, MAIL_SCOPES } from "./src/graph-client.js";
 export { startMailMonitor } from "./src/monitor.js";
+export { getSecret, hasSecret, SECRETS } from "./src/secrets.js";
 export type { Microsoft365Config, GraphMailMessage, SendMailOptions } from "./src/types.js";
 
 const plugin = {

@@ -74,7 +74,9 @@ https://login.microsoftonline.com/{tenant-id}/adminconsent?client_id={client-id}
 2. Find your app → **Permissions**
 3. Click **Grant admin consent**
 
-### Step 5: Store Client Secret in OpenClaw
+### Step 5: Store Client Secret
+
+**Option A: Use OpenClaw secrets store (recommended)**
 
 ```bash
 openclaw secrets set MICROSOFT365_CLIENT_SECRET
@@ -85,6 +87,12 @@ Optionally add a description:
 ```bash
 openclaw secrets set MICROSOFT365_CLIENT_SECRET --description "Azure AD app for email"
 ```
+
+The plugin automatically reads from the secrets store at `~/.openclaw/secrets.json`.
+
+**Option B: Set in config directly (less secure)**
+
+Add to `channels.microsoft365.clientSecret` in your config. Not recommended as the value is stored in plaintext.
 
 ### Step 6: Configure OpenClaw
 

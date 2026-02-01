@@ -12,6 +12,7 @@ import type {
   GraphSubscription,
   SendMailOptions,
 } from "./types.js";
+import { getSecret, SECRETS } from "./secrets.js";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const AUTH_BASE = "https://login.microsoftonline.com";
@@ -301,14 +302,29 @@ export class GraphClient {
 /**
  * Extract credentials from config
  */
+/**
+ * Resolve credentials from config and secrets store.
+ *
+ * Client secret is resolved in order:
+ * 1. From config.clientSecret (if set directly)
+ * 2. From secrets store (MICROSOFT365_CLIENT_SECRET)
+ *
+ * This allows users to either set the secret in config or use the secure secrets store.
+ */
 export function resolveCredentials(config?: Microsoft365Config): Microsoft365Credentials | null {
-  if (!config?.clientId || !config?.clientSecret) {
+  if (!config?.clientId) {
+    return null;
+  }
+
+  // Resolve client secret: config first, then secrets store
+  const clientSecret = config.clientSecret || getSecret(SECRETS.CLIENT_SECRET);
+  if (!clientSecret) {
     return null;
   }
 
   return {
     clientId: config.clientId,
-    clientSecret: config.clientSecret,
+    clientSecret,
     tenantId: config.tenantId ?? "common",
     refreshToken: config.refreshToken,
     accessToken: config.accessToken,
