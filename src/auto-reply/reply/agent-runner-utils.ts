@@ -3,7 +3,6 @@ import { getChannelDock } from "../../channels/dock.js";
 import type { ChannelId, ChannelThreadingToolContext } from "../../channels/plugins/types.js";
 import { normalizeAnyChannelId, normalizeChannelId } from "../../channels/registry.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import { isReasoningTagProvider } from "../../utils/provider-utils.js";
 import { estimateUsageCost, formatTokenCount, formatUsd } from "../../utils/usage-format.js";
 import type { TemplateContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
@@ -132,5 +131,8 @@ export const appendUsageLine = (payloads: ReplyPayload[], line: string): ReplyPa
   return updated;
 };
 
-export const resolveEnforceFinalTag = (run: FollowupRun["run"], provider: string) =>
-  Boolean(run.enforceFinalTag || isReasoningTagProvider(provider));
+// NOTE: enforceFinalTag requires models to wrap response in <final> tags.
+// Most providers (including ollama) use <think> tags but NOT <final> tags.
+// Only honor explicit run.enforceFinalTag, don't auto-enable based on provider.
+export const resolveEnforceFinalTag = (run: FollowupRun["run"], _provider: string) =>
+  Boolean(run.enforceFinalTag);
