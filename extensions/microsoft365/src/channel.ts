@@ -5,10 +5,11 @@
  */
 
 import { z } from "zod";
-import type { ChannelPlugin, OpenClawConfig } from "openclaw/plugin-sdk";
-import { buildChannelConfigSchema, DEFAULT_ACCOUNT_ID, PAIRING_APPROVED_MESSAGE } from "openclaw/plugin-sdk";
+import type { ChannelPlugin, OpenClawConfig, RuntimeEnv } from "openclaw/plugin-sdk";
+import { buildChannelConfigSchema, DEFAULT_ACCOUNT_ID, PAIRING_APPROVED_MESSAGE, logInboundDrop } from "openclaw/plugin-sdk";
 
 import type { Microsoft365Config, Microsoft365AccountSnapshot, GraphMailMessage } from "./types.js";
+import { getMicrosoft365Runtime } from "./runtime.js";
 
 /**
  * Zod schema for Microsoft 365 channel configuration
@@ -34,6 +35,7 @@ const Microsoft365ConfigSchema = z.object({
 });
 import { GraphClient, resolveCredentials } from "./graph-client.js";
 import { startMailMonitor, type MailMonitorRuntime } from "./monitor.js";
+import { microsoft365Outbound } from "./outbound.js";
 
 type ResolvedMicrosoft365Account = {
   accountId: string;
@@ -296,8 +298,14 @@ export const microsoft365Plugin: ChannelPlugin<ResolvedMicrosoft365Account> = {
           cfg,
           runtime: monitorRuntime,
           abortSignal,
-          onMail: async ({ message, cfg: _cfg, runtime: _runtime }) => {
-            await handleIncomingMail({ message, ctx });
+          onMail: async ({ message }) => {
+            await handleIncomingMail({
+              message,
+              cfg,
+              runtime,
+              accountId,
+              log: ctx.log,
+            });
           },
           onStatusChange: (status) => {
             runtimeState.connected = status.connected;
@@ -324,57 +332,187 @@ export const microsoft365Plugin: ChannelPlugin<ResolvedMicrosoft365Account> = {
     },
   },
 
-  // outbound: microsoft365Outbound, // TODO: implement
+  outbound: microsoft365Outbound,
 };
 
+const CHANNEL_ID = "microsoft365" as const;
+
 /**
- * Handle an incoming email message
+ * Handle an incoming email message using the proper OpenClaw dispatch pipeline.
  */
 async function handleIncomingMail(params: {
   message: GraphMailMessage;
-  ctx: {
-    cfg: OpenClawConfig;
-    runtime: unknown;
-    log?: { info: (msg: string) => void };
-    injectMessage?: (msg: {
-      channel: string;
-      accountId: string;
-      from: string;
-      fromName?: string;
-      to?: string;
-      text: string;
-      messageId?: string;
-      threadId?: string;
-      metadata?: Record<string, unknown>;
-    }) => Promise<void>;
-  };
+  cfg: OpenClawConfig;
+  runtime: RuntimeEnv;
+  accountId: string;
+  log?: { info: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void; debug?: (msg: string) => void };
 }): Promise<void> {
-  const { message, ctx } = params;
+  const { message, cfg, runtime, accountId, log } = params;
+  const core = getMicrosoft365Runtime();
 
-  const fromEmail = message.from?.emailAddress?.address;
+  const fromEmail = message.from?.emailAddress?.address?.toLowerCase();
   const fromName = message.from?.emailAddress?.name;
-  const subject = message.subject;
-  const body = message.body?.contentType === "text" ? message.body.content : message.bodyPreview;
+  const subject = message.subject ?? "(no subject)";
+  const rawBody = message.body?.contentType === "text"
+    ? message.body.content?.trim()
+    : message.bodyPreview?.trim() ?? "";
 
-  ctx.log?.info(`Incoming email from ${fromEmail}: ${subject}`);
+  if (!fromEmail) {
+    log?.warn?.("microsoft365: dropping message with no sender address");
+    return;
+  }
 
-  // Format message for injection
-  const text = `Subject: ${subject}\n\n${body}`;
+  log?.info?.(`Incoming email from ${fromEmail}: ${subject}`);
 
-  // Inject into OpenClaw as a session event
-  await ctx.injectMessage?.({
-    channel: "microsoft365",
-    accountId: DEFAULT_ACCOUNT_ID,
-    from: fromEmail,
-    fromName,
-    text,
-    messageId: message.id,
-    threadId: message.conversationId,
-    metadata: {
-      subject,
-      internetMessageId: message.internetMessageId,
-      importance: message.importance,
-      hasAttachments: message.hasAttachments,
+  // --- DM policy enforcement ---
+  const m365 = cfg.channels?.microsoft365 as Microsoft365Config | undefined;
+  const dmPolicy = m365?.dmPolicy ?? "pairing";
+
+  const configAllowFrom = (m365?.allowFrom ?? []).map((e) => String(e).trim().toLowerCase()).filter(Boolean);
+  const storeAllowFrom = await core.channel.pairing.readAllowFromStore(CHANNEL_ID).catch(() => []);
+  const storeAllowList = storeAllowFrom.map((e) => String(e).trim().toLowerCase()).filter(Boolean);
+  const effectiveAllowFrom = [...configAllowFrom, ...storeAllowList];
+
+  if (dmPolicy !== "open") {
+    const senderAllowed = effectiveAllowFrom.some(
+      (entry) => entry === fromEmail || entry === "*",
+    );
+    if (!senderAllowed) {
+      if (dmPolicy === "pairing") {
+        const { code, created } = await core.channel.pairing.upsertPairingRequest({
+          channel: CHANNEL_ID,
+          id: fromEmail,
+          meta: { name: fromName || undefined },
+        });
+        if (created) {
+          // Send pairing reply via email
+          try {
+            const credentials = resolveCredentials(m365);
+            if (credentials?.refreshToken) {
+              const client = new GraphClient({ credentials });
+              await client.replyToMail(
+                message.id,
+                core.channel.pairing.buildPairingReply({
+                  channel: CHANNEL_ID,
+                  idLine: `Your email address: ${fromEmail}`,
+                  code,
+                }),
+              );
+            }
+          } catch (err) {
+            log?.error?.(`microsoft365: pairing reply failed for ${fromEmail}: ${String(err)}`);
+          }
+        }
+      }
+      logInboundDrop({
+        log: (msg) => log?.info?.(msg),
+        channel: CHANNEL_ID,
+        reason: `dmPolicy=${dmPolicy}`,
+        target: fromEmail,
+      });
+      return;
+    }
+  }
+
+  // Mark email as read so we don't process it again
+  try {
+    const credentials = resolveCredentials(m365);
+    if (credentials?.refreshToken) {
+      const client = new GraphClient({ credentials });
+      await client.markAsRead(message.id);
+    }
+  } catch (err) {
+    log?.warn?.(`microsoft365: failed to mark message as read: ${String(err)}`);
+  }
+
+  // --- Route resolution ---
+  const route = core.channel.routing.resolveAgentRoute({
+    cfg,
+    channel: CHANNEL_ID,
+    accountId,
+    peer: { kind: "dm", id: fromEmail },
+  });
+
+  const storePath = core.channel.session.resolveStorePath(cfg.session?.store, {
+    agentId: route.agentId,
+  });
+
+  // --- Build message body with envelope ---
+  const envelopeOptions = core.channel.reply.resolveEnvelopeFormatOptions(cfg);
+  const previousTimestamp = core.channel.session.readSessionUpdatedAt({
+    storePath,
+    sessionKey: route.sessionKey,
+  });
+  const messageTimestamp = message.receivedDateTime
+    ? new Date(message.receivedDateTime).getTime()
+    : Date.now();
+
+  const bodyText = subject
+    ? `Subject: ${subject}\n\n${rawBody}`
+    : rawBody;
+
+  const body = core.channel.reply.formatAgentEnvelope({
+    channel: "Microsoft 365 Mail",
+    from: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
+    timestamp: messageTimestamp,
+    previousTimestamp,
+    envelope: envelopeOptions,
+    body: bodyText,
+  });
+
+  // --- Finalize inbound context ---
+  const ctxPayload = core.channel.reply.finalizeInboundContext({
+    Body: body,
+    RawBody: bodyText,
+    CommandBody: bodyText,
+    From: `microsoft365:${fromEmail}`,
+    To: `microsoft365:${accountId}`,
+    SessionKey: route.sessionKey,
+    AccountId: route.accountId,
+    ChatType: "direct" as const,
+    ConversationLabel: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
+    SenderName: fromName || undefined,
+    SenderId: fromEmail,
+    Provider: CHANNEL_ID,
+    Surface: CHANNEL_ID,
+    MessageSid: message.id,
+    Timestamp: messageTimestamp,
+    OriginatingChannel: CHANNEL_ID,
+    OriginatingTo: `microsoft365:${accountId}`,
+  });
+
+  // --- Record session ---
+  await core.channel.session.recordInboundSession({
+    storePath,
+    sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
+    ctx: ctxPayload,
+    onRecordError: (err) => {
+      log?.error?.(`microsoft365: failed updating session meta: ${String(err)}`);
+    },
+  });
+
+  // --- Dispatch reply ---
+  await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
+    ctx: ctxPayload,
+    cfg,
+    dispatcherOptions: {
+      deliver: async (payload) => {
+        const text = (payload as { text?: string }).text ?? "";
+        if (!text.trim()) return;
+
+        const credentials = resolveCredentials(m365);
+        if (!credentials?.refreshToken) {
+          log?.error?.("microsoft365: cannot reply, missing refreshToken");
+          return;
+        }
+
+        const client = new GraphClient({ credentials });
+        // Reply to the original message to keep the thread
+        await client.replyToMail(message.id, text);
+      },
+      onError: (err, info) => {
+        log?.error?.(`microsoft365 ${info.kind} reply failed: ${String(err)}`);
+      },
     },
   });
 }

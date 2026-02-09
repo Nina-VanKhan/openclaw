@@ -18,6 +18,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 
 import { microsoft365Plugin } from "./src/channel.js";
+import { setMicrosoft365Runtime } from "./src/runtime.js";
 
 export { GraphClient, resolveCredentials, buildAuthUrl, exchangeCodeForTokens, MAIL_SCOPES } from "./src/graph-client.js";
 export { startMailMonitor } from "./src/monitor.js";
@@ -30,6 +31,7 @@ const plugin = {
   description: "Microsoft 365 Mail channel plugin (Graph API)",
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi) {
+    setMicrosoft365Runtime(api.runtime);
     api.registerChannel({ plugin: microsoft365Plugin });
 
     // Register CLI commands for OAuth flow

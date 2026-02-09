@@ -136,11 +136,16 @@ export class GraphClient {
       throw new Error(`Graph API error: ${res.status} ${error}`);
     }
 
-    if (res.status === 204) {
+    if (res.status === 204 || res.status === 202) {
       return undefined as T;
     }
 
-    return res.json() as Promise<T>;
+    const text = await res.text();
+    if (!text) {
+      return undefined as T;
+    }
+
+    return JSON.parse(text) as T;
   }
 
   /**
