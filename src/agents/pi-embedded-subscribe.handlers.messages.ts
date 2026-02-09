@@ -65,6 +65,23 @@ export function handleMessageUpdate(
       : undefined;
   const evtType = typeof assistantRecord?.type === "string" ? assistantRecord.type : "";
 
+  // Emit native thinking events (from providers like Ollama that use separate thinking fields)
+  // as reasoning agent events for external consumers (dashboard, etc.).
+  // Only emit when reasoning is enabled (reasoningMode is "on" or "stream").
+  if (evtType === "thinking_delta" || evtType === "thinking_start" || evtType === "thinking_end") {
+    if (ctx.state.reasoningMode !== "off" && evtType === "thinking_delta") {
+      const thinkDelta = typeof assistantRecord?.delta === "string" ? assistantRecord.delta : "";
+      if (thinkDelta) {
+        emitAgentEvent({
+          runId: ctx.params.runId,
+          stream: "reasoning",
+          data: { delta: thinkDelta },
+        });
+      }
+    }
+    return;
+  }
+
   if (evtType !== "text_delta" && evtType !== "text_start" && evtType !== "text_end") {
     return;
   }
@@ -113,6 +130,18 @@ export function handleMessageUpdate(
   if (ctx.state.streamReasoning) {
     // Handle partial <think> tags: stream whatever reasoning is visible so far.
     ctx.emitReasoningStream(extractThinkingFromTaggedStream(ctx.state.deltaBuffer));
+  }
+
+  // Also emit reasoning for models using inline <think> tags (not native thinking events).
+  {
+    const thinkingText = extractThinkingFromTaggedStream(ctx.state.deltaBuffer);
+    if (thinkingText) {
+      emitAgentEvent({
+        runId: ctx.params.runId,
+        stream: "reasoning",
+        data: { text: thinkingText },
+      });
+    }
   }
 
   const next = ctx

@@ -231,33 +231,10 @@ export async function resolveReplyDirectives(params: {
       };
     }
   }
-  const hasInlineDirective =
-    parsedDirectives.hasThinkDirective ||
-    parsedDirectives.hasVerboseDirective ||
-    parsedDirectives.hasReasoningDirective ||
-    parsedDirectives.hasElevatedDirective ||
-    parsedDirectives.hasExecDirective ||
-    parsedDirectives.hasModelDirective ||
-    parsedDirectives.hasQueueDirective;
-  if (hasInlineDirective) {
-    const stripped = stripStructuralPrefixes(parsedDirectives.cleaned);
-    const noMentions = isGroup ? stripMentions(stripped, ctx, cfg, agentId) : stripped;
-    if (noMentions.trim().length > 0) {
-      const directiveOnlyCheck = parseInlineDirectives(noMentions, {
-        modelAliases: configuredAliases,
-      });
-      if (directiveOnlyCheck.cleaned.trim().length > 0) {
-        const allowInlineStatus =
-          parsedDirectives.hasStatusDirective && allowTextCommands && command.isAuthorizedSender;
-        parsedDirectives = allowInlineStatus
-          ? {
-              ...clearInlineDirectives(parsedDirectives.cleaned),
-              hasStatusDirective: true,
-            }
-          : clearInlineDirectives(parsedDirectives.cleaned);
-      }
-    }
-  }
+  // NOTE: Previous logic here was incorrectly clearing directives when message
+  // had both directive AND content (e.g. "/reasoning on What is 2+2?").
+  // Directives should be honored regardless of whether there's additional content.
+  // Directive-only detection is still handled downstream for acknowledgment purposes.
   let directives = commandAuthorized
     ? parsedDirectives
     : {
