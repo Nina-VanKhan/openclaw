@@ -60,4 +60,29 @@ export const microsoft365Outbound: ChannelOutboundAdapter = {
     });
     return { channel: "microsoft365" };
   },
+
+  sendMedia: async ({ cfg, to, text, mediaUrl, replyToId }) => {
+    const m365 = cfg.channels?.microsoft365 as Microsoft365Config | undefined;
+    const credentials = resolveCredentials(m365);
+    if (!credentials?.refreshToken) {
+      return { channel: "microsoft365", error: "Not configured (missing refreshToken)" };
+    }
+
+    const client = new GraphClient({ credentials });
+
+    // Include media URL as a link in the email body
+    const body = mediaUrl ? `${text}\n\n${mediaUrl}` : text;
+
+    if (replyToId && typeof replyToId === "string") {
+      await client.replyToMail(replyToId, body);
+      return { channel: "microsoft365" };
+    }
+
+    await client.sendMail({
+      to,
+      subject: "Re: OpenClaw",
+      body,
+    });
+    return { channel: "microsoft365" };
+  },
 };
