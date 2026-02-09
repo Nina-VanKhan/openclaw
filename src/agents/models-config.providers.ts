@@ -117,12 +117,17 @@ async function discoverOllamaModels(configuredBaseUrl?: string): Promise<ModelDe
     }
     return data.models.map((model) => {
       const modelId = model.name;
-      const isReasoning =
-        modelId.toLowerCase().includes("r1") || modelId.toLowerCase().includes("reasoning");
+      // Note: Ollama models with "r1" or "reasoning" in the name do have native
+      // thinking capabilities (via <think> tags), but Ollama's OpenAI-compatible
+      // API does NOT support the `reasoning_effort` parameter. Setting reasoning: true
+      // causes OpenClaw to auto-enable thinking=low which sends reasoning_effort
+      // to the API, resulting in empty responses or errors.
+      // These models work correctly with reasoning: false - their thinking happens
+      // internally without API parameters.
       return {
         id: modelId,
         name: modelId,
-        reasoning: isReasoning,
+        reasoning: false,
         input: ["text"],
         cost: OLLAMA_DEFAULT_COST,
         contextWindow: OLLAMA_DEFAULT_CONTEXT_WINDOW,
