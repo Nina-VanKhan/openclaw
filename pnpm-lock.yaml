@@ -384,6 +384,15 @@ importers:
         specifier: workspace:*
         version: link:../..
 
+  extensions/microsoft365:
+    dependencies:
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
+
   extensions/minimax-portal-auth:
     devDependencies:
       openclaw:
