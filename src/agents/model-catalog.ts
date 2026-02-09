@@ -95,6 +95,37 @@ export async function loadModelCatalog(params?: {
         models.push({ id, name, provider, contextWindow, reasoning, input });
       }
 
+      // Load custom providers (like Ollama) directly from models.json
+      // since ModelRegistry doesn't support them
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const modelsJsonPath = join(agentDir, "models.json");
+        const raw = await readFile(modelsJsonPath, "utf8");
+        const parsed = JSON.parse(raw) as {
+          providers?: Record<string, { models?: Array<DiscoveredModel> }>;
+        };
+        const existingProviders = new Set(models.map((m) => m.provider));
+        for (const [providerKey, providerConfig] of Object.entries(parsed.providers ?? {})) {
+          // Only add providers not already in the catalog (custom providers)
+          if (!existingProviders.has(providerKey) && Array.isArray(providerConfig.models)) {
+            for (const model of providerConfig.models) {
+              const id = String(model?.id ?? "").trim();
+              if (!id) continue;
+              const name = String(model?.name ?? id).trim() || id;
+              const contextWindow =
+                typeof model?.contextWindow === "number" && model.contextWindow > 0
+                  ? model.contextWindow
+                  : undefined;
+              const reasoning = typeof model?.reasoning === "boolean" ? model.reasoning : undefined;
+              const input = Array.isArray(model?.input) ? model.input : undefined;
+              models.push({ id, name, provider: providerKey, contextWindow, reasoning, input });
+            }
+          }
+        }
+      } catch {
+        // Ignore errors loading custom providers - fall back to catalog-only
+      }
+
       if (models.length === 0) {
         // If we found nothing, don't cache this result so we can try again.
         modelCatalogPromise = null;
