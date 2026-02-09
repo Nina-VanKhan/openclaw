@@ -377,8 +377,8 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
               }
               nextGuild.users = mergeAllowlist({ existing: users, additions });
             }
-            const channels = (guildConfig as { channels?: Record<string, unknown> }).channels ?? {};
-            if (channels && typeof channels === "object") {
+            const channels = (guildConfig as { channels?: Record<string, unknown> }).channels;
+            if (channels && typeof channels === "object" && Object.keys(channels).length > 0) {
               const nextChannels: Record<string, unknown> = { ...channels };
               for (const [channelKey, channelConfig] of Object.entries(channels)) {
                 if (!channelConfig || typeof channelConfig !== "object") {
