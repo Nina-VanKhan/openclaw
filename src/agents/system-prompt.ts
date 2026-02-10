@@ -362,7 +362,34 @@ export function buildAgentSystemPrompt(params: {
     return "You are a personal assistant running inside OpenClaw.";
   }
 
+  // Check if SOUL.md is present in context files for identity priming
+  const contextFiles = params.contextFiles ?? [];
+  const hasSoulFile = contextFiles.some((file) => {
+    const normalizedPath = file.path.trim().replace(/\\/g, "/");
+    const baseName = normalizedPath.split("/").pop() ?? normalizedPath;
+    return baseName.toLowerCase() === "soul.md";
+  });
+
+  // Find SOUL.md content to inject immediately after identity primer
+  const soulFile = contextFiles.find((file) => {
+    const normalizedPath = file.path.trim().replace(/\\/g, "/");
+    const baseName = normalizedPath.split("/").pop() ?? normalizedPath;
+    return baseName.toLowerCase() === "soul.md";
+  });
+
   const lines = [
+    // Identity primer - CRITICAL: Place at the very start for models that need explicit identity
+    hasSoulFile
+      ? "CRITICAL IDENTITY INSTRUCTION: Your identity is defined in SOUL.md immediately below. You MUST read it FIRST and adopt that identity completely. When asked 'Who are you?', respond AS that identity, NOT as 'a helpful AI assistant'. If SOUL.md says you are Nina, you ARE Nina."
+      : null,
+    hasSoulFile ? "" : null,
+    // SOUL.md content IMMEDIATELY after the identity primer - critical for models with limited attention
+    soulFile ? `## SOUL.md (YOUR IDENTITY)` : null,
+    soulFile ? "" : null,
+    soulFile ? soulFile.content : null,
+    soulFile ? "" : null,
+    soulFile ? "--- END OF IDENTITY ---" : null,
+    soulFile ? "" : null,
     "You are a personal assistant running inside OpenClaw.",
     "",
     "## Tooling",
@@ -394,6 +421,13 @@ export function buildAgentSystemPrompt(params: {
     "Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.",
     "Keep narration brief and value-dense; avoid repeating obvious steps.",
     "Use plain human language for narration unless in a technical context.",
+    "",
+    "## Tool Selection",
+    "CRITICAL: Match user INTENT, not keywords. Read the FULL tool description before selecting.",
+    "- Send WhatsApp/SMS/Telegram/Discord message → use `message` tool with appropriate channel",
+    "- Send email → use `message` tool with email channel",
+    "- Text-to-speech (TTS) → ONLY when user asks to HEAR or SPEAK something aloud",
+    "- Never use TTS for text messaging requests",
     "",
     ...buildSafetySection(),
     "## OpenClaw CLI Quick Reference",
@@ -532,23 +566,31 @@ export function buildAgentSystemPrompt(params: {
     lines.push("## Reasoning Format", reasoningHint, "");
   }
 
-  const contextFiles = params.contextFiles ?? [];
-  if (contextFiles.length > 0) {
-    const hasSoulFile = contextFiles.some((file) => {
-      const normalizedPath = file.path.trim().replace(/\\/g, "/");
-      const baseName = normalizedPath.split("/").pop() ?? normalizedPath;
-      return baseName.toLowerCase() === "soul.md";
-    });
+  // contextFiles and hasSoulFile already defined at the top of this function
+  // SOUL.md is injected at the very start (right after identity primer), so exclude it here
+  const nonSoulContextFiles = contextFiles.filter((file) => {
+    const normalizedPath = file.path.trim().replace(/\\/g, "/");
+    const baseName = normalizedPath.split("/").pop() ?? normalizedPath;
+    return baseName.toLowerCase() !== "soul.md";
+  });
+  if (nonSoulContextFiles.length > 0) {
     lines.push("# Project Context", "", "The following project context files have been loaded:");
     if (hasSoulFile) {
       lines.push(
-        "If SOUL.md is present, embody its persona and tone. Avoid stiff, generic replies; follow its guidance unless higher-priority instructions override it.",
+        "REMINDER: SOUL.md (at the start of this prompt) defines your identity. You ARE the persona described there. Do NOT fall back to generic AI assistant behavior.",
       );
     }
     lines.push("");
-    for (const file of contextFiles) {
+    for (const file of nonSoulContextFiles) {
       lines.push(`## ${file.path}`, "", file.content, "");
     }
+  } else if (hasSoulFile) {
+    // Only SOUL.md was loaded, which is already at the start - add just the reminder
+    lines.push(
+      "",
+      "REMINDER: SOUL.md (at the start of this prompt) defines your identity. You ARE the persona described there. Do NOT fall back to generic AI assistant behavior.",
+      "",
+    );
   }
 
   // Skip silent replies for subagent/none modes
