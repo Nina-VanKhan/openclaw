@@ -1,6 +1,6 @@
 import type { StreamFn } from "@mariozechner/pi-agent-core";
 import type { SimpleStreamOptions } from "@mariozechner/pi-ai";
-import { streamSimple } from "@mariozechner/pi-ai";
+import { stream, streamSimple } from "@mariozechner/pi-ai";
 
 import type { OpenClawConfig } from "../../config/config.js";
 import { log } from "./logger.js";
@@ -51,12 +51,23 @@ function createStreamFnWithExtraParams(
     return undefined;
   }
 
-  const streamParams: Partial<SimpleStreamOptions> & { cacheControlTtl?: CacheControlTtl } = {};
+  const streamParams: Partial<SimpleStreamOptions> & {
+    cacheControlTtl?: CacheControlTtl;
+    toolChoice?: "auto" | "none" | "required";
+  } = {};
   if (typeof extraParams.temperature === "number") {
     streamParams.temperature = extraParams.temperature;
   }
   if (typeof extraParams.maxTokens === "number") {
     streamParams.maxTokens = extraParams.maxTokens;
+  }
+  // Pass through toolChoice for OpenAI-compatible APIs (Ollama requires this for tool calls)
+  if (
+    extraParams.toolChoice === "auto" ||
+    extraParams.toolChoice === "none" ||
+    extraParams.toolChoice === "required"
+  ) {
+    streamParams.toolChoice = extraParams.toolChoice;
   }
   const cacheControlTtl = resolveCacheControlTtl(extraParams, provider, modelId);
   if (cacheControlTtl) {
@@ -69,12 +80,24 @@ function createStreamFnWithExtraParams(
 
   log.debug(`creating streamFn wrapper with params: ${JSON.stringify(streamParams)}`);
 
-  const underlying = baseStreamFn ?? streamSimple;
-  const wrappedStreamFn: StreamFn = (model, context, options) =>
-    underlying(model, context, {
+  // Use `stream` (not `streamSimple`) when toolChoice is set, as streamSimple doesn't support it.
+  // IMPORTANT: We must force `stream` when toolChoice is needed, even if baseStreamFn is set,
+  // because streamSimple doesn't support toolChoice parameter.
+  const needsFullStream = Boolean(streamParams.toolChoice);
+  const underlying = needsFullStream ? stream : (baseStreamFn ?? streamSimple);
+
+  const wrappedStreamFn: StreamFn = (model, context, options) => {
+    // Filter out undefined values from options to prevent overriding streamParams
+    const filteredOptions = options
+      ? Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined))
+      : {};
+    const merged = {
       ...streamParams,
-      ...options,
-    });
+      ...filteredOptions,
+    };
+    // Cast to StreamFn since `stream` has compatible runtime behavior but stricter types
+    return (underlying as StreamFn)(model, context, merged);
+  };
 
   return wrappedStreamFn;
 }
