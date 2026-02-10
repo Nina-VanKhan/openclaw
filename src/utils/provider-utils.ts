@@ -14,11 +14,12 @@ export function isReasoningTagProvider(provider: string | undefined | null): boo
   const normalized = provider.trim().toLowerCase();
 
   // Check for exact matches or known prefixes/substrings for reasoning providers
-  if (
-    normalized === "ollama" ||
-    normalized === "google-gemini-cli" ||
-    normalized === "google-generative-ai"
-  ) {
+  // NOTE: Ollama was removed from this list because:
+  // 1. Ollama models with native reasoning use <think> tags internally
+  // 2. Adding <final> wrapper instructions causes <final> tags to leak into UI
+  //    (dashboard server.js only strips <think>, not <final>)
+  // 3. Ollama models work correctly without the <final> tag requirement
+  if (normalized === "google-gemini-cli" || normalized === "google-generative-ai") {
     return true;
   }
 
