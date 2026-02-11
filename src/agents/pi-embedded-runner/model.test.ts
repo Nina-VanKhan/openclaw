@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../pi-model-discovery.js", () => ({
   discoverAuthStorage: vi.fn(() => ({ mocked: true })),
@@ -17,6 +17,12 @@ const makeModel = (id: string) => ({
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1,
   maxTokens: 1,
+});
+
+beforeEach(() => {
+  vi.mocked(discoverModels).mockReturnValue({
+    find: vi.fn(() => null),
+  } as unknown as ReturnType<typeof discoverModels>);
 });
 
 describe("buildInlineProviderModels", () => {
@@ -110,7 +116,7 @@ describe("buildInlineProviderModels", () => {
 });
 
 describe("resolveModel", () => {
-  it("includes provider baseUrl in fallback model", async () => {
+  it("includes provider baseUrl in fallback model", () => {
     const cfg = {
       models: {
         providers: {
@@ -122,14 +128,14 @@ describe("resolveModel", () => {
       },
     } as OpenClawConfig;
 
-    const result = await resolveModel("custom", "missing-model", "/tmp/agent", cfg);
+    const result = resolveModel("custom", "missing-model", "/tmp/agent", cfg);
 
     expect(result.model?.baseUrl).toBe("http://localhost:9000");
     expect(result.model?.provider).toBe("custom");
     expect(result.model?.id).toBe("missing-model");
   });
 
-  it("builds an openai-codex fallback for gpt-5.3-codex", async () => {
+  it("builds an openai-codex fallback for gpt-5.3-codex", () => {
     const templateModel = {
       id: "gpt-5.2-codex",
       name: "GPT-5.2 Codex",
@@ -152,7 +158,7 @@ describe("resolveModel", () => {
       }),
     } as unknown as ReturnType<typeof discoverModels>);
 
-    const result = await resolveModel("openai-codex", "gpt-5.3-codex", "/tmp/agent");
+    const result = resolveModel("openai-codex", "gpt-5.3-codex", "/tmp/agent");
 
     expect(result.error).toBeUndefined();
     expect(result.model).toMatchObject({
@@ -166,7 +172,7 @@ describe("resolveModel", () => {
     });
   });
 
-  it("builds an anthropic forward-compat fallback for claude-opus-4-6", async () => {
+  it("builds an anthropic forward-compat fallback for claude-opus-4-6", () => {
     const templateModel = {
       id: "claude-opus-4-5",
       name: "Claude Opus 4.5",
@@ -189,7 +195,7 @@ describe("resolveModel", () => {
       }),
     } as unknown as ReturnType<typeof discoverModels>);
 
-    const result = await resolveModel("anthropic", "claude-opus-4-6", "/tmp/agent");
+    const result = resolveModel("anthropic", "claude-opus-4-6", "/tmp/agent");
 
     expect(result.error).toBeUndefined();
     expect(result.model).toMatchObject({
@@ -201,13 +207,13 @@ describe("resolveModel", () => {
     });
   });
 
-  it("keeps unknown-model errors for non-gpt-5 openai-codex ids", async () => {
-    const result = await resolveModel("openai-codex", "gpt-4.1-mini", "/tmp/agent");
+  it("keeps unknown-model errors for non-gpt-5 openai-codex ids", () => {
+    const result = resolveModel("openai-codex", "gpt-4.1-mini", "/tmp/agent");
     expect(result.model).toBeUndefined();
     expect(result.error).toBe("Unknown model: openai-codex/gpt-4.1-mini");
   });
 
-  it("uses codex fallback even when openai-codex provider is configured", async () => {
+  it("uses codex fallback even when openai-codex provider is configured", () => {
     // This test verifies the ordering: codex fallback must fire BEFORE the generic providerCfg fallback.
     // If ordering is wrong, the generic fallback would use api: "openai-responses" (the default)
     // instead of "openai-codex-responses".
@@ -226,7 +232,7 @@ describe("resolveModel", () => {
       find: vi.fn(() => null),
     } as unknown as ReturnType<typeof discoverModels>);
 
-    const result = await resolveModel("openai-codex", "gpt-5.3-codex", "/tmp/agent", cfg);
+    const result = resolveModel("openai-codex", "gpt-5.3-codex", "/tmp/agent", cfg);
 
     expect(result.error).toBeUndefined();
     expect(result.model?.api).toBe("openai-codex-responses");

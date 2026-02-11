@@ -1,11 +1,12 @@
+import type { OpenClawConfig } from "../../config/config.js";
+import type { RuntimeEnv } from "../../runtime.js";
 import {
   ensureAuthProfileStore,
   resolveApiKeyForProfile,
   resolveAuthProfileOrder,
 } from "../../agents/auth-profiles.js";
 import { resolveEnvApiKey } from "../../agents/model-auth.js";
-import type { OpenClawConfig } from "../../config/config.js";
-import type { RuntimeEnv } from "../../runtime.js";
+import { normalizeOptionalSecretInput } from "../../utils/normalize-secret-input.js";
 
 export type NonInteractiveApiKeySource = "flag" | "env" | "profile";
 
@@ -48,7 +49,7 @@ export async function resolveNonInteractiveApiKey(params: {
   agentDir?: string;
   allowProfile?: boolean;
 }): Promise<{ key: string; source: NonInteractiveApiKeySource } | null> {
-  const flagKey = params.flagValue?.trim();
+  const flagKey = normalizeOptionalSecretInput(params.flagValue);
   if (flagKey) {
     return { key: flagKey, source: "flag" };
   }
